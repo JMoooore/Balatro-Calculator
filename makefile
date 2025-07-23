@@ -1,18 +1,50 @@
-CC = gcc
-CFLAGS = -I. -Wall -Wextra
+# ─────────────────────────────
+#  build settings
+# ─────────────────────────────
+CC      = gcc
+CFLAGS  = -std=c11 -Wall -Wextra -pedantic -g -I.
 
-DEPS = deck.h
-OBJ = main.o deckfunc.o
+# source & object lists
+SRC     := main.c deckfunc.c          # add more *.c files here
+OBJ     := $(SRC:.c=.o)
 
-# Compile .c to .o
-%.o: %.c $(DEPS)
-	$(CC) -g -c -o $@ $< $(CFLAGS)
+TESTSRC := tests.c                    # <- the unit-tests file
+TESTOBJ := $(TESTSRC:.c=.o)
 
-# Link object files into executable
+DEPS    := deck.h                     # headers that every .c depends on
+
+# ─────────────────────────────
+#  default target
+# ─────────────────────────────
+.PHONY: all
+all: main
+
+# ─────────────────────────────
+#  program
+# ─────────────────────────────
 main: $(OBJ)
-	$(CC) -g -o $@ $^ $(CFLAGS)
+	$(CC) $(CFLAGS) $^ -o $@
 
-# Clean up build artifacts
+# ─────────────────────────────
+#  tests  (make check)
+# ─────────────────────────────
+.PHONY: check
+check: tests
+	./tests               # <- exits non-zero if any assert fails
+
+tests: $(TESTOBJ) $(filter-out main.o,$(OBJ))
+	$(CC) $(CFLAGS) $^ -o $@
+
+# ─────────────────────────────
+#  pattern rules
+# ─────────────────────────────
+# Compile .c -> .o (depends on headers too)
+%.o: %.c $(DEPS)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# ─────────────────────────────
+#  housekeeping
+# ─────────────────────────────
 .PHONY: clean
 clean:
-	rm -f *.o deck
+	$(RM) $(OBJ) $(TESTOBJ) main tests

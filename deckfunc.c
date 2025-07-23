@@ -7,14 +7,29 @@
 #define DEFAULTFLUSHSIZE 5
 #define DEFAULTSTRAIGHTSIZE 5
 
-const char suit_labels[4] = {'c', 'h', 'd', 's'};
+const char suit_labels[] = {'c', 'd', 'h', 's'};
+
 const char *rank_labels[] = {"INVALID", "ACE",  "TWO",   "THREE", "FOUR",
                              "FIVE",    "SIX",  "SEVEN", "EIGHT", "NINE",
                              "TEN",     "JACK", "QUEEN", "KING"};
 
+const char *const scoring_hand_names[SCORING_HANDS_COUNT] = {
+    "FLUSH FIVE",     "FLUSH HOUSE",     "FIVE OF A KIND", "ROYAL FLUSH",
+    "STRAIGHT FLUSH", "FOUR OF A KIND",  "FULL HOUSE",     "FLUSH",
+    "STRAIGHT",       "THREE OF A KIND", "TWO PAIR",       "PAIR",
+    "HIGH CARD"};
+
+const Score score_table[SCORING_HANDS_COUNT] = {
+    [FLUSH_FIVE] = {160, 16},     [FLUSH_HOUSE] = {140, 14},
+    [FIVE_OF_A_KIND] = {120, 12}, [ROYAL_FLUSH] = {100, 8},
+    [STRAIGHT_FLUSH] = {100, 8},  [FOUR_OF_A_KIND] = {60, 7},
+    [FULL_HOUSE] = {40, 4},       [FLUSH] = {35, 4},
+    [STRAIGHT] = {30, 4},         [THREE_OF_A_KIND] = {30, 3},
+    [TWO_PAIR] = {20, 2},         [PAIR] = {10, 2},
+    [HIGH_CARD] = {5, 1}};
+
 enum Suit labelToSuit(char label) {
-  int length = sizeof(suit_labels);
-  for (int i = 0; i < length; i++) {
+  for (int i = 0; i < 4; i++) {
     if (label == suit_labels[i]) {
       return (enum Suit)i;
     }
@@ -25,14 +40,14 @@ enum Suit labelToSuit(char label) {
 
 char *suitToChar(enum Suit suit) {
   switch (suit) {
-  case SPADES:
-    return "\u2660";
   case CLUBS:
     return "\u2663";
   case DIAMONDS:
-    return "\u2661";
-  case HEARTS:
     return "\u2662";
+  case HEARTS:
+    return "\u2661";
+  case SPADES:
+    return "\u2660";
   case INVALID_SUIT:
     printf("Invalid suit passed to suit to char\n");
     return "X";
@@ -68,86 +83,73 @@ const char *rankToChar(enum Rank rank) {
   return "-1";
 }
 
-bool isFlush(Hand *h) {
-  int diamondCount = 5;
-  int spadeCount = 5;
-  int clubCount = 5;
-  int heartCount = 5;
+bool isFlush(const Hand *h) {
+  int suit_cnt[4] = {0};
 
-  for (int i = 0; i < h->size; i++) {
-    Card c = h->cards[i];
-    switch (c.suit) {
-    case SPADES:
-      spadeCount--;
-      break;
-    case CLUBS:
-      clubCount--;
-      break;
-    case DIAMONDS:
-      diamondCount--;
-      break;
-    case HEARTS:
-      heartCount--;
-      break;
-    case INVALID_SUIT:
-      exit(-1);
-    }
+  for (int i = 0; i < h->size; ++i) {
+    enum Suit s = h->cards[i].suit;
+    if (s >= CLUBS && s <= SPADES)
+      ++suit_cnt[s];
+    else
+      exit(EXIT_FAILURE);
   }
 
-  if (diamondCount == 0 || spadeCount == 0 || clubCount == 0 ||
-      heartCount == 0) {
-    return true;
+  for (int i = 0; i < 4; ++i) {
+    if (suit_cnt[i] >= DEFAULTFLUSHSIZE)
+      return true;
   }
 
   return false;
 }
 
-int compare_ranks(const void *a, const void *b) {
-  enum Rank ra = *(const enum Rank *)a;
-  enum Rank rb = *(const enum Rank *)b;
-  return (ra - rb);
-}
+// static int compare_ranks(const void *a, const void *b) {
+//   int ra = *(const enum Rank *)a;
+//   int rb = *(const enum Rank *)b;
+//   return (ra > rb) - (ra < rb);
+// }
 
-bool isStraight(Hand *h) {
-  enum Rank ranks[h->size];
+bool isStraight(const Hand *h) {
+  bool seen[15] = {false};
 
-  for (int i = 0; i < h->size; i++) {
-    ranks[i] = h->cards[i].rank;
+  for (int i = 0; i < h->size; ++i) {
+    enum Rank r = h->cards[i].rank;
+    if (r < ACE || r > KING)
+      exit(EXIT_FAILURE);
+    seen[r] = true;
   }
 
-  qsort(ranks, h->size, sizeof(enum Rank), compare_ranks);
+  if (seen[ACE])
+    seen[14] = true;
 
-  if (ranks[0] == ACE && ranks[1] == TWO && ranks[2] == THREE &&
-      ranks[3] == FOUR && ranks[4] == FIVE) {
-    return true;
-  }
-
-  for (int i = 1; i < h->size; i++) {
-    if (ranks[i] != ranks[i - 1] + 1) {
-      return false;
+  int run = 0;
+  for (int r = ACE; r <= 14; ++r) {
+    if (seen[r]) {
+      if (++run >= DEFAULTSTRAIGHTSIZE)
+        return true;
+    } else {
+      run = 0;
     }
   }
-  return true;
+  return false;
 }
 
-int scoreBaseHand(Hand *h) {
-  int max = 0;
-  int secondMax = 0;
+enum Scoring_Hands findBaseHand(Hand *h) {
+  int max = 0, secondMax = 0;
+  // Rank histogram
   int rank[15] = {0};
-  bool flush, straight;
-  flush = isFlush(h);
-  straight = isStraight(h);
+  const bool flush = isFlush(h);
+  const bool straight = isStraight(h);
 
-  for (int i = 0; i < h->size; i++) {
+  // Count each rank of cards in hand and find og max
+  for (int i = 0; i < h->size; i++)
     rank[h->cards[i].rank]++;
-    if (rank[h->cards[i].rank] > max) {
-      max = rank[h->cards[i].rank];
-    }
-  }
 
-  for (int i = 0; i < 15; i++) {
-    if (rank[i] > secondMax && rank[i] != max) {
-      secondMax = rank[i];
+  for (int r = ACE; r <= KING; ++r) {
+    if (rank[r] > max) {
+      secondMax = max;
+      max = rank[r];
+    } else if (rank[r] > secondMax) {
+      secondMax = rank[r];
     }
   }
 
@@ -163,7 +165,7 @@ int scoreBaseHand(Hand *h) {
     return FIVE_OF_A_KIND;
   }
 
-  if (straight && h->cards[0].rank == 1 && h->cards[1].rank == 11) {
+  if (straight && flush && rank[ACE] != 0 && rank[KING] != 0) {
     return ROYAL_FLUSH;
   }
 
@@ -198,8 +200,17 @@ int scoreBaseHand(Hand *h) {
   return HIGH_CARD;
 }
 
+int inputCards(Hand *player_hand) {
+  printf("Input the cards in your hand:\n");
+
+  for (int i = 0; i < player_hand->size; i++) {
+    player_hand->cards[i] = *inputCardAndPrint();
+  }
+  return 0;
+}
+
 Hand *inputHandAndPrint(void) {
-  printf("Welcome, input the cards in your hand:\n");
+  printf("Input the cards in your hand:\n");
   Hand *h = createDefaultHand();
 
   for (int i = 0; i < h->size; i++) {
@@ -215,8 +226,15 @@ Card *inputCardAndPrint(void) {
   int rank = INVALID_RANK;
 
   while (suit == INVALID_SUIT || rank == INVALID_RANK) {
-    printf("Input a rank and suit:\n");
-    scanf(" %s %c", s_rank, &s_suit);
+    printf("Input a rank (e.g., A, 2-10, J, Q, K) and a suit (S, C, H, D):\n");
+    if (scanf("%2s %c", s_rank, &s_suit) != 2) { // %2s to avoid overflow
+      // Clear bad input
+      int ch;
+      while ((ch = getchar()) != '\n' && ch != EOF)
+        ;
+      printf("Invalid input. Try again.\n");
+      continue;
+    }
     // rank = labelToRank("a");
     // suit = labelToSuit('s');
     rank = labelToRank(s_rank);
@@ -224,8 +242,11 @@ Card *inputCardAndPrint(void) {
     printf("Rank %s\n", rankToChar(rank));
     printf("Suit %s\n", suitToChar(suit));
   }
-
   Card *c = malloc(sizeof(Card));
+  if (!c) {
+    perror("malloc");
+    exit(EXIT_FAILURE);
+  }
   c->rank = rank;
   c->suit = suit;
 
@@ -242,7 +263,7 @@ Deck *createDeck(int size) {
   return deck;
 }
 
-Deck *createDefaultDeck() { return createDeck(DEFAULTDECKSIZE); }
+Deck *createDefaultDeck(void) { return createDeck(DEFAULTDECKSIZE); }
 
 Hand *createHand(int size) {
   Hand *hand = malloc(sizeof(Hand) + size * sizeof(Card));
@@ -254,4 +275,4 @@ Hand *createHand(int size) {
   return hand;
 }
 
-Hand *createDefaultHand() { return createHand(DEFAULTHANDSIZE); }
+Hand *createDefaultHand(void) { return createHand(DEFAULTHANDSIZE); }

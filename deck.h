@@ -1,4 +1,7 @@
+#include <stdbool.h>
 #include <stddef.h>
+
+typedef struct Hand Hand;
 
 enum Scoring_Hands {
   FLUSH_FIVE,
@@ -13,11 +16,13 @@ enum Scoring_Hands {
   THREE_OF_A_KIND,
   TWO_PAIR,
   PAIR,
-  HIGH_CARD
+  HIGH_CARD,
+  SCORING_HANDS_COUNT
 };
 
 enum Rank {
-  ACE = 1,
+  INVALID_RANK = 0,
+  ACE,
   TWO,
   THREE,
   FOUR,
@@ -29,8 +34,7 @@ enum Rank {
   TEN,
   JACK,
   QUEEN,
-  KING,
-  INVALID_RANK
+  KING
 };
 
 enum Suit { CLUBS, DIAMONDS, HEARTS, SPADES, INVALID_SUIT };
@@ -45,20 +49,29 @@ typedef struct {
   Card cards[];
 } Deck;
 
-typedef struct {
+struct Hand {
   int size;
   Card cards[];
-} Hand;
+};
 
 typedef struct {
   int chips;
   int multiplier;
 } Score;
 
-int scoreBaseHand(Hand *h);
+enum Scoring_Hands findBaseHand(Hand *h);
+int inputCards(Hand *h);
 Hand *inputHandAndPrint(void);
 Card *inputCardAndPrint(void);
 Deck *createDeck(int size);
 Deck *createDefaultDeck(void);
 Hand *createHand(int size);
 Hand *createDefaultHand(void);
+enum Suit labelToSuit(char label);
+char *suitToChar(enum Suit suit);
+enum Rank labelToRank(char *label);
+bool isStraight(const Hand *h);
+bool isFlush(const Hand *h);
+const char *rankToChar(enum Rank rank);
+extern const char *const scoring_hand_names[SCORING_HANDS_COUNT];
+extern const Score score_table[SCORING_HANDS_COUNT];
